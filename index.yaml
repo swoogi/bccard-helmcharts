@@ -1,0 +1,33 @@
+apiVersion: v1
+entries:
+  kafka-spark:
+  - apiVersion: v2
+    appVersion: 2.6.0
+    created: "2021-06-07T14:05:35.859238846+09:00"
+    description: Helm chart for Apache Kafka (spark distribution)
+    digest: 3235e4d9bcda0bc0c0fb65f9b341a9445b98e4f3e59307c83e11439f49f5c862
+    name: kafka-spark
+    urls:
+    - https://github.com/swoogi/bccard-helmcharts/releases/download/kafka-spark-1.0.0/kafka-spark-1.0.0.tgz
+    version: 1.0.0
+  spark-felice:
+  - apiVersion: v2
+    appVersion: 1.0.0
+    created: "2021-06-07T14:05:36.088540264+09:00"
+    description: Helm chart for SPARK FELICE®
+    digest: 1f8dade48e7982b19186e0329a8ab8b82de2ad61b13cede0c6116867195c3007
+    name: spark-felice
+    urls:
+    - https://github.com/swoogi/bccard-helmcharts/releases/download/spark-felice-1.0.0/spark-felice-1.0.0.tgz
+    version: 1.0.0
+  zookeeper-spark:
+  - apiVersion: v2
+    appVersion: 3.6.2
+    created: "2021-06-07T14:05:36.317353636+09:00"
+    description: Helm chart for Apache ZooKeeper (spark distribution)
+    digest: 727841eb16f34241a152a957689014cd16bc23aaead781122aab96933dad786d
+    name: zookeeper-spark
+    urls:
+    - https://github.com/swoogi/bccard-helmcharts/releases/download/zookeeper-spark-1.0.0/zookeeper-spark-1.0.0.tgz
+    version: 1.0.0
+generated: "2021-06-07T14:05:35.52745918+09:00"
