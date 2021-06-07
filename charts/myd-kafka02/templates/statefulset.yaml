@@ -1,0 +1,123 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "kafka.fullname" . }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "kafka.selectorLabels" . | nindent 6 }}
+  serviceName: {{ include "kafka.fullname" . }}-hs
+  replicas: {{ .Values.replicaCount }}
+  updateStrategy:
+    type: RollingUpdate 
+  podManagementPolicy: OrderedReady 
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "kafka.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "kafka.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      #### KAFKA CONTAINER ####
+      - name: {{ .Chart.Name }}
+        securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+        image: "{{ .Values.images.registry }}/{{ .Values.images.kafka.name }}:{{ .Values.images.kafka.tag }}"
+        imagePullPolicy: {{ .Values.images.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.service.port }}  
+          name: client
+          protocol: TCP
+        readinessProbe:
+          tcpSocket:
+            port: {{ .Values.service.port }} 
+          timeoutSeconds: 2
+        startupProbe:
+          tcpSocket:
+            port: {{ .Values.service.port }}
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 300
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+        env:
+          - name: KAFKA_ZOOKEEPER_CONNECT
+            value: {{ .Values.configs.zookeeperConnect }}
+          - name: KAFKA_LOG_DIRS   ## fix for block storage!!
+            value: /data/kafka
+          {{- with .Values.configs.optional }}
+          {{- toYaml . | nindent 10 }}
+          {{- end }}
+        volumeMounts:
+        - name: {{ include "kafka.fullname" . }}-logdir
+          mountPath: /data 
+      #### NODE-EXPORTER CONTAINER ####
+      {{- if .Values.configs.nodeExporter }}
+      - name: {{ .Chart.Name }}-nodexporter
+        securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+        image: "{{ .Values.images.registry }}/{{ .Values.images.nodeExporter.name }}:{{ .Values.images.nodeExporter.tag }}"
+        imagePullPolicy: {{ .Values.images.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.configs.nodeExporter.port }}  
+          name: node-exporter
+        startupProbe:
+          tcpSocket:
+            port: {{ .Values.configs.nodeExporter.port }}          
+        args:
+          - --collector.disable-defaults
+          - --collector.filesystem
+          - --collector.cpu
+          - --collector.meminfo
+          - --collector.netstat_detail
+        volumeMounts:
+        - name: {{ include "kafka.fullname" . }}-logdir
+          mountPath: /data
+          readOnly: true
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "64Mi"
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # {{- with .Values.affinity }}
+      # affinity:
+      #   {{- toYaml . | nindent 8 }}
+      # {{- end }}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: "app"
+                    operator: In
+                    values:
+                    - {{ include "kafka.fullname" . }}
+              topologyKey: "kubernetes.io/hostname"
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  volumeClaimTemplates:
+  - metadata:
+      name: {{ include "kafka.fullname" . }}-logdir
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: {{ .Values.configs.volume.storageClass }}
+      resources:
+        requests:
+          storage: {{ .Values.configs.volume.storage }}

@@ -1,0 +1,168 @@
+# Default values for felice.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+########## REPLICA SETTING ##########
+# currently support only 1
+replicaCount: 1
+
+########## CONTAINER IMAGE SETTING ##########
+images:
+  registry: "sparkandassociates"  # docker hub
+  # pullPolicy: "IfNotPresent"
+  pullPolicy: "Always"
+  feliceMon:
+    name: prometheus-spark
+    tag: "2.27.1"
+  feliceBoard:
+    name: grafana-spark
+    tag: "latest"
+  feliceApi:
+    name: felice-api
+    tag: "1.0.0"
+  feliceClient:
+    name: felice-client
+    tag: "1.0.0"
+  # feliceZoo:
+  #   name: zookeeper-spark
+  #   tag: "latest"
+  feliceLag:
+    name: burrow-spark
+    tag: "latest"
+  
+imagePullSecrets: #[]
+  - name: "bccard-dockerhub-sparkandassociates"
+nameOverride: "spark"
+fullnameOverride: "" #"myd-felice"
+
+########## EXECUTION SETTING ##########
+configs:
+  volumes:
+    tsdb:
+      storage: "100Gi"
+      storageClass: ""
+    rulesdir:
+      storage: "1Gi"
+      storageClass: ""
+    datadir:
+      storage: "10Gi"
+      storageClass: ""
+
+########## MONITORING CLUSTER SETTING ##########
+## for monitoring cluster config
+monitoringClusters:
+  ## first cluster setting
+  # - name: "myd01"
+  #   zookeeper:
+  #     # domainSuffix: "default.svc.cluster.local"     # if zookeeper is installed on other namespace
+  #     hostPrefix: "myd-zookeeper01-spark"
+  #     servers: 3
+  #     clientPort: 2181
+  #     metricsProviderHttpPort: 7000  ##METRICS_PROVIDER__HTTP_PORT
+  #     nodeExporterPort: 9100
+  #   kafka:
+  #     version: "2.7.0"
+  #     # domainSuffix: "default.svc.cluster.local"     # if kafka is installed on other namespace
+  #     hostPrefix: "myd-kafka01-spark"
+  #     servers: 3
+  #     clientPort: 9093
+  #     jmxExporterPort: 9404
+  #     nodeExporterPort: 9100
+  #     ## for burrow
+  #     security:
+  #       protocol: "sasl"  ## only sasl or tls
+  #       mechanism: "SCRAM-SHA-512"
+  #       username: "burrow"
+  #       password: "burrow01"
+  ## second cluster setting
+  - name: "myd02"
+    zookeeper:
+      # domainSuffix: "default.svc.cluster.local"     # if zookeeper is installed on other namespace
+      hostPrefix: "myd-zookeeper02-spark"
+      servers: 3
+      clientPort: 2181
+      metricsProviderHttpPort: 7000  ##METRICS_PROVIDER__HTTP_PORT
+      nodeExporterPort: 9100
+    kafka:
+      version: "2.7.0"
+      # domainSuffix: "default.svc.cluster.local"     # if kafka is installed on other namespace
+      hostPrefix: "myd-kafka02-spark"
+      servers: 3
+      clientPort: 9093
+      jmxExporterPort: 9404
+      nodeExporterPort: 9100
+      ## for burrow
+      security:
+        protocol: "sasl"  ## only sasl or tls
+        mechanism: "SCRAM-SHA-512"
+        username: "burrow"
+        password: "burrow02"
+
+########## K8S SERVICE SETTING ##########
+service:
+  type: NodePort
+  port: 8080
+
+########## K8S RESOURCE SETTING ##########
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+########## K8S AUTOSCALE SETTING : MUST DISABLE ##########
+autoscaling:
+  enabled: false
+  # minReplicas: 1
+  # maxReplicas: 100
+  # targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+########## OTHER SETTING ##########
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  fsGroup: 5555
+
+securityContext:
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+  runAsUser: 1000100001
+
+ingress:
+  enabled: false
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: chart-example.local
+      paths: []
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

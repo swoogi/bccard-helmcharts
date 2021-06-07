@@ -1,0 +1,353 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "felice.fullname" . }}-config
+data:
+  burrow.toml: |+
+    [logging]
+    level='info'
+
+    [httpserver.default]
+    address=':8000'
+
+    [storage.felice]
+    class-name='inmemory'
+    expire-group=86400
+    min-distance=1
+
+    ##########
+    ### GENERATED MONITORING CLUSTER TARGETS ###
+    {{- range $cluster := .Values.monitoringClusters }}
+    {{- with $cluster.kafka }}
+    ### cluster : {{ $cluster.name }} ###
+    [client-profile.{{ $cluster.name }}]
+    kafka-version='{{ $cluster.kafka.version }}'
+    {{- if $cluster.kafka.security }}
+    {{ $cluster.kafka.security.protocol }}='{{ $cluster.name }}'
+
+    [{{ $cluster.kafka.security.protocol }}.{{ $cluster.name }}]
+    mechanism='{{ $cluster.kafka.security.mechanism }}'
+    username='{{ $cluster.kafka.security.username }}'
+    password='{{ $cluster.kafka.security.password }}'
+    {{- end }}
+
+    [cluster.{{ $cluster.name }}]
+    class-name='kafka'
+    {{- if $cluster.kafka.domainSuffix }}
+    servers=[ '{{ $cluster.kafka.hostPrefix }}-hs.{{ $cluster.kafka.domainSuffix }}:{{ $cluster.kafka.clientPort }}' ]
+    {{- else }}
+    servers=[ '{{ $cluster.kafka.hostPrefix }}-hs:{{ $cluster.kafka.clientPort }}' ]
+    {{- end }}
+    client-profile='{{ $cluster.name }}'
+    topic-refresh=60
+    offset-refresh=5
+
+    [consumer.{{ $cluster.name }}]
+    class-name='kafka'
+    cluster='{{ $cluster.name }}'
+    {{- if $cluster.kafka.domainSuffix }}
+    servers=[ '{{ $cluster.kafka.hostPrefix }}-hs.{{ $cluster.kafka.domainSuffix }}:{{ $cluster.kafka.clientPort }}' ]
+    {{- else }}
+    servers=[ '{{ $cluster.kafka.hostPrefix }}-hs:{{ $cluster.kafka.clientPort }}' ]
+    {{- end }}
+    client-profile='{{ $cluster.name }}'
+    {{- end }}
+    {{- end }}
+    ########## END OF CONFIG ##########
+
+  prometheus.yml: |+
+    global:
+      scrape_interval:     15s # By default, scrape targets every 15 seconds.
+
+      external_labels:
+        monitor: 'felice-monitor'
+
+    rule_files:
+      - '/opt/felice/rules/*.yml'
+
+    alerting:
+      alertmanagers:
+        - static_configs:
+          - targets:
+            - felice-api:8989
+        - api_version: v2
+        - path_prefix: /api/v2
+
+    #### INTERNAL SERVICES ####
+    scrape_configs:
+      #### FELICE MON : PROMETHEUS ####
+      - job_name: 'felice-mon'
+        # Override the global default and scrape targets from this job every 5 seconds.
+        scrape_interval: 5s
+        static_configs:
+          - targets: ['felice-mon:9090']
+
+      #### FELICE BOARD : GRAFANA ####
+
+      #### FELICE BACKEND ####
+      - job_name: 'felice-back'
+        scrape_interval: 5s
+        metrics_path: /monitor/metrics
+        static_configs:
+          - targets: ['felice-api:7100']
+
+      #### FELICE FRONT ####
+
+      #### FELICE ZOO : ZOOKEEPER for burrow ####
+      - job_name: 'felice-zoo'
+        scrape_interval: 5s
+        static_configs:
+          - targets: ['felice-zoo:7000']
+
+      #### FELICE LAG : BURROW ####
+      - job_name: 'consumer-lag'
+        scrape_interval: 5s
+        static_configs:
+          - targets: ['felice-lag:8000']
+            labels:
+              instance: 'burrow'
+
+      ##########
+      ### GENERATED MONITORING CLUSTER TARGETS ###
+      {{- range $cluster := .Values.monitoringClusters }}
+      # #### CLUSTER : {{ $cluster.name }} ####
+      {{- with $cluster.zookeeper }}
+      ## ZooKeeper
+      - job_name: '{{ $cluster.name }}-zookeeper'
+        scrape_interval: 5s
+        file_sd_configs:
+          - files:
+            - 'targets/{{ $cluster.name }}-zookeeper.yaml'
+            
+      ## Zookeeper Node
+      - job_name: '{{ $cluster.name }}-zookeeper_node'
+        scrape_interval: 5s
+        file_sd_configs:
+          - files:
+            - 'targets/{{ $cluster.name }}-zookeeper_node.yaml'
+      {{- end }}
+
+      {{- with $cluster.kafka }}
+      ## Kafka
+      - job_name: '{{ $cluster.name }}-kafka'
+        scrape_interval: 5s
+        file_sd_configs:
+          - files:
+            - 'targets/{{ $cluster.name }}-kafka.yaml'
+
+      ## Kafka Node
+      - job_name: '{{ $cluster.name }}-kafka_node'
+        scrape_interval: 5s
+        file_sd_configs:
+          - files:
+            - 'targets/{{ $cluster.name }}-kafka_node.yaml'
+      {{- end }}
+
+      {{- with $cluster.schema_registry }}
+      ## Schema Registry
+      - job_name: '{{ $cluster.name }}-schema_registry'
+        scrape_interval: 5s
+        dns_sd_configs:
+          - names:
+            - '{{ .serviceName }}'
+            type: 'A'
+            port: {{ .jmxExporterPort }}
+      
+      ## Schema Registry Node
+      - job_name: '{{ $cluster.name }}-schema_registry_node'
+        scrape_interval: 5s
+        dns_sd_configs:
+          - names:
+            - '{{ .serviceName }}'
+            type: 'A'
+            port: {{ .nodeExporterPort }}
+      {{- end }}
+
+      {{- end }} {{ if 0 }}##### range $cluster #####{{ end }}
+
+
+      ##########
+      ### GENERATED MONITORING CLUSTER TARGETS : NEW ###
+      ## zookeeper
+      - job_name: zookeeper
+        scrape_interval: 5s
+        file_sd_configs:
+          - files:
+            - 'targets/zookeeper.yaml'
+            refresh_interval: 3m
+      
+      ## zookeeper node
+      - job_name: zookeeper_node
+        scrape_interval: 5s
+        file_sd_configs:
+          - files:
+            - 'targets/zookeeper_node.yaml'
+            refresh_interval: 3m
+      
+      ## kafka
+      - job_name: kafka
+        scrape_interval: 5s
+        file_sd_configs:
+          - files:
+            - 'targets/kafka.yaml'
+            refresh_interval: 3m
+      
+      ## kafka node
+      - job_name: kafka_node
+        scrape_interval: 5s
+        file_sd_configs:
+          - files:
+            - 'targets/kafka_node.yaml'
+            refresh_interval: 3m
+      
+      ## schema_registry (TBD)
+      
+      ## schema_registry node (TBD)
+
+      ########## END OF CONFIG ##########
+
+---
+# felice-mon : /etc/prometheus/targets
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "felice.fullname" . }}-monitoring-targets
+data:
+{{- range $cluster := .Values.monitoringClusters }}
+  {{- with $cluster.zookeeper }}
+  ##### ZOOKEEPER TARGET CONFIG FILES #####
+  ### zookeeper
+  {{ $cluster.name }}-zookeeper.yaml: |+
+    {{ range $i := until ( int $cluster.zookeeper.servers ) }}
+      {{- $host := printf "%s-%d.%s-hs" $cluster.zookeeper.hostPrefix $i $cluster.zookeeper.hostPrefix }}
+      {{- if $cluster.zookeeper.domainSuffix }}
+        {{ $host = print $host "." $cluster.zookeeper.domainSuffix }}
+      {{- end }}{{ if 0 }}## if $cluster.zookeeper.domainSuffix ##{{ end }}
+      - targets:
+        - '{{ $host }}:{{ $cluster.zookeeper.metricsProviderHttpPort }}'
+        labels:
+          instance: '{{ add $i 1 }}'
+          zookeeper: '{{ $host }}:{{ $cluster.zookeeper.clientPort }}'
+    {{- end }}{{ if 0 }}## range $i ##{{ end }}
+  
+  ### zookeeper_node
+  {{ $cluster.name }}-zookeeper_node.yaml: |+
+    {{ range $i := until ( int $cluster.zookeeper.servers ) }}
+      {{- $host := printf "%s-%d.%s-hs" $cluster.zookeeper.hostPrefix $i $cluster.zookeeper.hostPrefix }}
+      {{- if $cluster.zookeeper.domainSuffix }}
+        {{ $host = print $host "." $cluster.zookeeper.domainSuffix }}
+      {{- end }}{{ if 0 }}## if $cluster.zookeeper.domainSuffix ##{{ end }}
+      - targets:
+        - '{{ $host }}:{{ $cluster.zookeeper.nodeExporterPort }}'
+        labels:
+          instance: '{{ add $i 1 }}'
+    {{- end }}{{ if 0 }}## range $i ##{{ end }}
+  {{- end }}{{ if 0 }}## $cluster.zookeeper ##{{ end }}
+
+  {{- with $cluster.kafka }}
+  ##### KAFKA TARGET CONFIG FILES #####
+  ### kafka
+  {{ $cluster.name }}-kafka.yaml: |+
+    {{ range $i := until ( int $cluster.kafka.servers ) }}
+      {{- $host := printf "%s-%d.%s-hs" $cluster.kafka.hostPrefix $i $cluster.kafka.hostPrefix }}
+      {{- if $cluster.kafka.domainSuffix }}
+        {{ $host = print $host "." $cluster.kafka.domainSuffix }}
+      {{- end }}{{ if 0 }}## if $cluster.kafka.domainSuffix ##{{ end }}
+      - targets:
+        - '{{ $host }}:{{ $cluster.kafka.jmxExporterPort }}'
+        labels:
+          instance: '{{ $i }}'
+          brokerId: '{{ $i }}'
+    {{- end }}{{ if 0 }}## range $i ##{{ end }}
+  
+  ### kafka_node
+  {{ $cluster.name }}-kafka_node.yaml: |+
+    {{ range $i := until ( int $cluster.kafka.servers ) }}
+      {{- $host := printf "%s-%d.%s-hs" $cluster.kafka.hostPrefix $i $cluster.kafka.hostPrefix }}
+      {{- if $cluster.kafka.domainSuffix }}
+        {{ $host = print $host "." $cluster.kafka.domainSuffix }}
+      {{- end }}{{ if 0 }}## if $cluster.kafka.domainSuffix ##{{ end }}
+      - targets:
+        - '{{ $host }}:{{ $cluster.kafka.nodeExporterPort }}'
+        labels:
+          instance: '{{ $i }}'
+    {{ end }}{{ if 0 }}## range $i ##{{ end }}
+  {{ end }}{{ if 0 }}## $cluster.kafka ##{{ end }}
+  
+{{ end }}
+
+##### NEW TARGET CONFIG FILES #####
+##### ZOOKEEPER
+  zookeeper.yaml: |+
+    {{- range $cluster := .Values.monitoringClusters }}
+      {{- with $cluster.zookeeper }}
+        {{ range $i := until ( int $cluster.zookeeper.servers ) }}
+          {{- $host := printf "%s-%d.%s-hs" $cluster.zookeeper.hostPrefix $i $cluster.zookeeper.hostPrefix }}
+          {{- if $cluster.zookeeper.domainSuffix }}
+            {{ $host = print $host "." $cluster.zookeeper.domainSuffix }}
+          {{- end }}{{ if 0 }}## if $cluster.zookeeper.domainSuffix ##{{ end }}
+          - targets:
+            - '{{ $host }}:{{ $cluster.zookeeper.metricsProviderHttpPort }}'
+            labels:
+              instance: '{{ add $i 1 }}'
+              zookeeper: '{{ $host }}:{{ $cluster.zookeeper.clientPort }}'
+              cluster: '{{ $cluster.name }}'
+        {{- end }}{{ if 0 }}## range $i ##{{ end }}
+      {{- end }}{{ if 0 }}## with $cluster.zookeeper ##{{ end }}
+    {{- end }}{{ if 0 }}## range $cluster ##{{ end }}
+
+##### ZOOKEEPER NODE
+  zookeeper_node.yaml: |+
+    {{- range $cluster := .Values.monitoringClusters }}
+      {{- with $cluster.zookeeper }}
+        {{ range $i := until ( int $cluster.zookeeper.servers ) }}
+          {{- $host := printf "%s-%d.%s-hs" $cluster.zookeeper.hostPrefix $i $cluster.zookeeper.hostPrefix }}
+          {{- if $cluster.zookeeper.domainSuffix }}
+            {{ $host = print $host "." $cluster.zookeeper.domainSuffix }}
+          {{- end }}{{ if 0 }}## if $cluster.zookeeper.domainSuffix ##{{ end }}
+          - targets:
+            - '{{ $host }}:{{ $cluster.zookeeper.nodeExporterPort }}'
+            labels:
+              instance: '{{ add $i 1 }}'
+              cluster: '{{ $cluster.name }}'
+        {{- end }}{{ if 0 }}## range $i ##{{ end }}
+      {{- end }}{{ if 0 }}## with $cluster.zookeeper ##{{ end }}
+    {{- end }}{{ if 0 }}## range $cluster ##{{ end }}
+
+##### KAFKA
+  kafka.yaml: |+
+    {{- range $cluster := .Values.monitoringClusters }}
+      {{- with $cluster.kafka }}
+        {{ range $i := until ( int $cluster.kafka.servers ) }}
+          {{- $host := printf "%s-%d.%s-hs" $cluster.kafka.hostPrefix $i $cluster.kafka.hostPrefix }}
+          {{- if $cluster.kafka.domainSuffix }}
+            {{ $host = print $host "." $cluster.kafka.domainSuffix }}
+          {{- end }}{{ if 0 }}## if $cluster.kafka.domainSuffix ##{{ end }}
+          - targets:
+            - '{{ $host }}:{{ $cluster.kafka.jmxExporterPort }}'
+            labels:
+              instance: '{{ $i }}'
+              brokerId: '{{ $i }}'
+              cluster: '{{ $cluster.name }}'
+        {{- end }}{{ if 0 }}## range $i ##{{ end }}
+      {{- end }}{{ if 0 }}## with $cluster.zookeeper ##{{ end }}
+    {{- end }}{{ if 0 }}## range $cluster ##{{ end }}
+
+##### KAFKA NODE
+  kafka_node.yaml: |+
+    {{- range $cluster := .Values.monitoringClusters }}
+      {{- with $cluster.kafka }}
+        {{ range $i := until ( int $cluster.kafka.servers ) }}
+          {{- $host := printf "%s-%d.%s-hs" $cluster.kafka.hostPrefix $i $cluster.kafka.hostPrefix }}
+          {{- if $cluster.kafka.domainSuffix }}
+            {{ $host = print $host "." $cluster.kafka.domainSuffix }}
+          {{- end }}{{ if 0 }}## if $cluster.kafka.domainSuffix ##{{ end }}
+          - targets:
+            - '{{ $host }}:{{ $cluster.kafka.nodeExporterPort }}'
+            labels:
+              instance: '{{ $i }}'
+              brokerId: '{{ $i }}'
+              cluster: '{{ $cluster.name }}'
+        {{ end }}{{ if 0 }}## range $i ##{{ end }}
+      {{- end }}{{ if 0 }}## with $cluster.zookeeper ##{{ end }}
+    {{- end }}{{ if 0 }}## range $cluster ##{{ end }}
